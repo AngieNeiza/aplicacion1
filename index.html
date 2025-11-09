@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cartas al Convento</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f7f7f7; margin:0; padding:20px; }
+    .card { max-width:700px; margin:20px auto; background:#fff; padding:18px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+    input, textarea, button { width:100%; padding:10px; margin-top:8px; box-sizing:border-box; border-radius:6px; border:1px solid #ccc; }
+    button { background:#2d8f2d; color:#fff; border:none; cursor:pointer; }
+    .small { font-size:13px; color:#666; }
+    .message { background:#fafafa; border:1px solid #eee; padding:12px; margin-top:10px; border-radius:8px; }
+    .btn-delete { background:#e74c3c; color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; }
+    .confirm-link { display:inline-block; margin-top:8px; padding:6px 10px; background:#eef6ff; color:#0366d6; border-radius:6px; text-decoration:none; }
+    .badge { font-size:12px; padding:4px 8px; border-radius:999px; background:#ffd; color:#884; margin-left:8px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Cartas al Convento</h2>
+    <p class="small">Escribe un mensaje para las hermanas. Se guardará localmente (demo).</p>
+
+    <label>Nombre (opcional)</label>
+    <input id="nombre" placeholder="Tu nombre">
+
+    <label>Documento</label>
+    <input id="documento" type="text" placeholder="Tu documento">
+
+    <label>Correo electrónico</label>
+    <input id="correo" type="email" placeholder="Tu correo electrónico">
+
+    <label>Confirmación del correo electrónico</label>
+    <input id="confirmCorreo" type="email" placeholder="Confirma tu correo electrónico">
+
+    <label>Edad</label>
+    <input id="edad" type="number" placeholder="Tu edad">
+
+    <label>Mensaje</label>
+    <textarea id="message" rows="5" maxlength="800" placeholder="Escribe tu carta..."></textarea>
+
+    <label><input id="anonymous" type="checkbox"> Enviar como anónimo</label>
+
+    <button id="sendBtn">Enviar carta</button>
+
+    <div id="alert" class="small" style="margin-top:10px; color:green;"></div>
+
+    <hr style="margin:18px 0; border:none; border-top:1px solid #eee;">
+
+    <h3>Cartas recibidas</h3>
+    <p class="small">Pulsa <strong>Ver</strong> para mostrar las cartas. El enlace de confirmación simulado abre una página que marca la carta como confirmada.</p>
+    <button onclick="renderList()">Ver cartas</button>
+    <div id="list" style="margin-top:12px;"></div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'cartasConvento_v2';
+
+    function getCartas() {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    }
+    function saveCartas(arr) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', () => {
+      const nombreEl = document.getElementById('nombre');
+      const mensajeEl = document.getElementById('message');
+      const anonEl = document.getElementById('anonymous');
+      const alertEl = document.getElementById('alert');
+
+      const nombre = (anonEl.checked) ? 'Anónimo' : (nombreEl.value.trim() || 'Sin nombre');
+      const mensaje = mensajeEl.value.trim();
+      if (!mensaje) {
+        alertEl.style.color = 'red';
+        alertEl.textContent = 'Escribe un mensaje antes de enviar.';
+        return;
+      }
+
+      const id = Date.now().toString(); // ID simple basado en tiempo
+      const carta = {
+        id,
+        nombre,
+        mensaje,
+        fecha: new Date().toLocaleString(),
+        confirmada: false
+      };
+
+      const cartas = getCartas();
+      cartas.push(carta);
+      saveCartas(cartas);
+
+      // ✅ Enlace corregido (sin regex problemático)
+      const base = location.origin + location.pathname.substring(0, location.pathname.lastIndexOf('/') + 1);
+      const confirmUrl = base + 'confirmacion.html?id=' + encodeURIComponent(id);
+
+      // Mostrar link con botón para copiar
+      alertEl.style.color = 'green';
+      alertEl.innerHTML = `
+        Carta enviada.<br>
+        <a class="confirm-link" href="${confirmUrl}" target="_blank">Abrir confirmación</a>
+        <button id="copyLinkBtn" style="margin-left:8px;padding:6px 8px;border-radius:6px;border:1px solid #ccc;cursor:pointer;">Copiar link</button>
+      `;
+
+      document.getElementById('copyLinkBtn').addEventListener('click', () => {
+        navigator.clipboard.writeText(confirmUrl).then(() => {
+          alertEl.innerHTML += ' <span style="color:#006600;margin-left:8px;">Copiado ✅</span>';
+        });
+      });
+
+      // Limpiar formulario
+      mensajeEl.value = '';
+      nombreEl.value = '';
+      anonEl.checked = false;
+
+      // Actualizar lista
+      renderList();
+    });
+
+    function renderList() {
+      const list = document.getElementById('list');
+      const cartas = getCartas().slice().reverse(); // mostrar últimas primero
+      list.innerHTML = '';
+      if (cartas.length === 0) {
+        list.innerHTML = '<p class="small">No hay cartas aún.</p>';
+        return;
+      }
+      cartas.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'message';
+        div.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div><strong>${escapeHtml(c.nombre)}</strong> <span class="small">— ${escapeHtml(c.fecha)}</span></div>
+            <div>${c.confirmada ? '<span class="badge">Confirmada</span>' : ''}</div>
+          </div>
+          <p style="margin-top:8px;">${escapeHtml(c.mensaje)}</p>
+          <div style="margin-top:8px;">
+            <a class="confirm-link" href="confirmacion.html?id=${encodeURIComponent(c.id)}" target="_blank">Abrir link de confirmación</a>
+            <button class="btn-delete" style="float:right;" onclick="borrarCarta('${c.id}')">Borrar</button>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function borrarCarta(id) {
+      if (!confirm('¿Eliminar esta carta?')) return;
+      let cartas = getCartas();
+      cartas = cartas.filter(c => c.id !== id);
+      saveCartas(cartas);
+      renderList();
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    renderList();
+  </script>
+</body>
+</html>
